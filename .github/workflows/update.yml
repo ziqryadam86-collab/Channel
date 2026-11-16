@@ -18,7 +18,7 @@ jobs:
           node-version: '18'
 
       - name: Pasang modul pergantungan (Dependencies)
-        run: npm install axios
+        run: npm install puppeteer
 
       - name: Jalankan skrip penjana m3u
         run: node update-stream.js
