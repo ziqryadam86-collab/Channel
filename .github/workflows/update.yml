@@ -1,0 +1,32 @@
+name: Auto Update TV9 M3U
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Berjalan setiap 1 jam (pada minit ke-0 setiap jam)
+  workflow_dispatch: # Boleh tekan 'Run workflow' secara manual di GitHub
+
+jobs:
+  update-m3u:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Semak keluar kod repositori
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Pasang modul pergantungan (Dependencies)
+        run: npm install axios
+
+      - name: Jalankan skrip penjana m3u
+        run: node update-stream.js
+
+      - name: Simpan dan muat naik semula ke GitHub
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions@github.com'
+          git add tv9.m3u8
+          git commit -m "Auto-update TV9 m3u8 stream link [skip ci]" || exit 0
+          git push
