@@ -7,24 +7,27 @@ async function generateM3U() {
     try {
         console.log('Mengambil pautan dari API...');
         
-        // Meminta data dari API (jika API memberikan respons JSON atau redirect URL)
+        // Tambah headers supaya pelayan API menganggap ini dari pelayar web Chrome
         const response = await axios.get(apiUrl, {
-            maxRedirects: 5, // Mengikut lencongan URL secara automatik jika ada
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            maxRedirects: 5,
             validateStatus: function (status) {
-                return status >= 200 && status < 403; // Terima status berjaya
+                return status >= 200 && status < 403;
             }
         });
 
-        // Dapatkan URL akhir selepas redirect (biasanya pautan master.m3u8 sebenar)
-        const finalStreamUrl = response.request.res.responseUrl || response.data.url;
+        // Dapatkan URL akhir selepas redirect atau dari data JSON
+        const finalStreamUrl = response.request.res.responseUrl || response.data.url || response.data;
 
-        if (!finalStreamUrl) {
-            throw new Error('Gagal mendapatkan pautan m3u8 dari respons API.');
+        if (!finalStreamUrl || typeof finalStreamUrl !== 'string' || !finalStreamUrl.startsWith('http')) {
+            throw new Error('Gagal mendapatkan pautan m3u8 yang sah daripada respons API.');
         }
 
         console.log('Pautan berjaya didapati:', finalStreamUrl);
 
-        // Membina kandungan fail M3U mengikut format yang anda mahukan
         const m3uContent = 
 `#EXTM3U
 #EXT-X-VERSION:3
@@ -32,7 +35,6 @@ async function generateM3U() {
 ${finalStreamUrl}
 `;
 
-        // Simpan ke dalam fail tv9.m3u8
         fs.writeFileSync('tv9.m3u8', m3uContent, 'utf8');
         console.log('Fail tv9.m3u8 berjaya dikemas kini!');
 
@@ -43,4 +45,4 @@ ${finalStreamUrl}
 }
 
 generateM3U();
-                  
+            
