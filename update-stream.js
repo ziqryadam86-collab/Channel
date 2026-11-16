@@ -14,20 +14,38 @@ async function generateM3U() {
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
 
-        console.log(`Melayari API: ${apiUrl}`);
-        // Buka halaman dan tunggu redirect berlaku sepenuhnya
-        await page.goto(apiUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        let finalStreamUrl = '';
 
-        // Dapatkan URL akhir selepas pelayar berjaya buat redirect (sama macam kat phone anda!)
-        const finalStreamUrl = page.url();
-        console.log('URL akhir yang berjaya dikesan:', finalStreamUrl);
+        // Tangkap fail .m3u8 yang keluar dari trafik rangkaian (network request)
+        page.on('request', interceptedRequest => {
+            const url = interceptedRequest.url();
+            if ((url.includes('.m3u8') || url.includes('tonton.com.my')) && !finalStreamUrl) {
+                if (url.includes('master.m3u8') || url.includes('.m3u8')) {
+                    finalStreamUrl = url;
+                }
+            }
+        });
+
+        console.log(`Melayari API: ${apiUrl}`);
+        // Buka halaman dan tunggu sehingga trafik rangkaian stabil
+        await page.goto(apiUrl, { waitUntil: 'networkidle2', timeout: 40000 }).catch(() => {});
+
+        // Tambah masa tunggu 4 saat untuk pastikan skrip JS di dalam laman v2 selesai muat turun stream
+        await new Promise(resolve => setTimeout(resolve, 4000));
+
+        // Jika melalui request masih tak jumpa, cuba semak URL semasa pelayar
+        if (!finalStreamUrl) {
+            finalStreamUrl = page.url();
+        }
 
         await browser.close();
 
-        // Pastikan URL bukan lagi link API mentah
+        // Jika URL akhir masih di domain api.dani-dev, anggap gagal
         if (!finalStreamUrl || finalStreamUrl.includes('dani-dev.co.za')) {
-            throw new Error('Gagal mendapatkan URL lencongan (redirect) yang sah.');
+            throw new Error('Gagal mengekstrak pautan m3u8 dari pautan v2.');
         }
+
+        console.log('Pautan m3u8 berjaya dikesan:', finalStreamUrl);
 
         // Tulis ke dalam fail tv9.m3u8
         const m3uContent = 
@@ -38,7 +56,7 @@ ${finalStreamUrl}
 `;
 
         fs.writeFileSync('tv9.m3u8', m3uContent, 'utf8');
-        console.log('Fail tv9.m3u8 berjaya dikemas kini dengan pautan segar!');
+        console.log('Fail tv9.m3u8 berjaya dikemas kini!');
 
     } catch (error) {
         console.error('Ralat berlaku:', error.message);
@@ -48,4 +66,4 @@ ${finalStreamUrl}
 }
 
 generateM3U();
-               
+        
