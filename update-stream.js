@@ -1,32 +1,47 @@
 const fs = require('fs');
-const axios = require('axios');
+const puppeteer = require('puppeteer');
 
 async function generateM3U() {
     const apiUrl = 'https://api.dani-dev.co.za/v1/stream/tonton/live/tv9';
     
     try {
-        console.log('Mengambil pautan dari API...');
+        console.log('Melancarkan pelayar web pelayan...');
+        const browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
         
-        // Tambah headers supaya pelayan API menganggap ini dari pelayar web Chrome
-        const response = await axios.get(apiUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*'
-            },
-            maxRedirects: 5,
-            validateStatus: function (status) {
-                return status >= 200 && status < 403;
+        const page = await browser.newPage();
+        
+        // Tetapkan User-Agent supaya menyamar sebagai Chrome sebenar
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+
+        let finalStreamUrl = '';
+
+        // Tangkap pautan rangkaian (network request) yang mengandungi m3u8
+        page.on('request', interceptedRequest => {
+            const url = interceptedRequest.url();
+            if (url.includes('.m3u8') && !finalStreamUrl) {
+                finalStreamUrl = url;
             }
         });
 
-        // Dapatkan URL akhir selepas redirect atau dari data JSON
-        const finalStreamUrl = response.request.res.responseUrl || response.data.url || response.data;
+        console.log('Melayari API:', apiUrl);
+        // Pergi ke API dan tunggu sehingga halaman selesai dimuatkan / di-redirect
+        await page.goto(apiUrl, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
 
-        if (!finalStreamUrl || typeof finalStreamUrl !== 'string' || !finalStreamUrl.startsWith('http')) {
-            throw new Error('Gagal mendapatkan pautan m3u8 yang sah daripada respons API.');
+        // Jika URL akhir masih belum ditangkap melalui request, ambil dari URL semasa pelayar
+        if (!finalStreamUrl) {
+            finalStreamUrl = page.url();
         }
 
-        console.log('Pautan berjaya didapati:', finalStreamUrl);
+        await browser.close();
+
+        if (!finalStreamUrl || !finalStreamUrl.includes('.m3u8')) {
+            throw new Error('Gagal menangkap pautan m3u8 melalui pelayar.');
+        }
+
+        console.log('Pautan m3u8 berjaya ditangkap:', finalStreamUrl);
 
         const m3uContent = 
 `#EXTM3U
@@ -39,7 +54,7 @@ ${finalStreamUrl}
         console.log('Fail tv9.m3u8 berjaya dikemas kini!');
 
     } catch (error) {
-        console.error('Ralat semasa mengemas kini strim:', error.message);
+        console.error('Ralat semasa menjalankan pelayar:', error.message);
         process.exit(1);
     }
 }
